@@ -23,7 +23,7 @@ export function StatusBar({ status }: StatusBarProps) {
           </span>
         )}
       </div>
-      <span>OpenClaw Desktop v0.1.0</span>
+      <span>OpenClaw Desktop v0.0.1</span>
     </div>
   );
 }

@@ -17,6 +17,7 @@ fn pty_spawn(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     settings: Settings,
+    args: Vec<String>,
 ) -> Result<(), String> {
     // Update stored settings
     {
@@ -24,12 +25,8 @@ fn pty_spawn(
         *s = settings.clone();
     }
 
-    eprintln!("[pty_spawn] Building command...");
-    let cmd = openclaw::build_openclaw_command(&app, &settings)?;
-    eprintln!("[pty_spawn] Command built, spawning PTY...");
-    let result = state.pty.spawn(&app, cmd, 120, 40);
-    eprintln!("[pty_spawn] Spawn result: {:?}", result);
-    result
+    let cmd = openclaw::build_openclaw_command(&app, &settings, &args)?;
+    state.pty.spawn(&app, cmd, 120, 40)
 }
 
 #[tauri::command]
@@ -63,6 +60,11 @@ fn load_settings_cmd() -> Settings {
     settings::load_settings()
 }
 
+#[tauri::command]
+fn check_openclaw_configured() -> bool {
+    openclaw::is_configured()
+}
+
 pub fn run() {
     let initial_settings = settings::load_settings();
 
@@ -78,16 +80,15 @@ pub fn run() {
             pty_kill,
             save_settings,
             load_settings_cmd,
+            check_openclaw_configured,
         ])
         .setup(|app| {
-            // Load settings on startup and emit to frontend
             let settings = settings::load_settings();
             let _ = app.emit("settings:loaded", &settings);
             Ok(())
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                // Kill PTY process on window close
                 if let Some(state) = window.try_state::<AppState>() {
                     let _ = state.pty.kill();
                 }

@@ -1,4 +1,4 @@
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -6,6 +6,7 @@ use tauri::{AppHandle, Emitter};
 
 pub struct PtyInstance {
     writer: Box<dyn Write + Send>,
+    master: Box<dyn MasterPty + Send>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
     _reader_thread: thread::JoinHandle<()>,
 }
@@ -60,28 +61,17 @@ impl PtyManager {
         // Spawn reader thread that forwards PTY output to frontend via Tauri events
         let app_handle = app.clone();
         let reader_thread = thread::spawn(move || {
-            eprintln!("[pty_reader] Reader thread started");
             let mut buf = [0u8; 8192];
             loop {
                 match reader.read(&mut buf) {
-                    Ok(0) => {
-                        eprintln!("[pty_reader] EOF");
-                        break;
-                    }
+                    Ok(0) => break,
                     Ok(n) => {
-                        // Convert bytes to string (lossy for non-UTF8 terminal output)
                         let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                        eprintln!("[pty_reader] Read {} bytes", n);
                         let _ = app_handle.emit("pty:data", &data);
                     }
-                    Err(e) => {
-                        eprintln!("[pty_reader] Error: {}", e);
-                        break;
-                    }
+                    Err(_) => break,
                 }
             }
-            // Process ended - emit status
-            eprintln!("[pty_reader] Thread ending, emitting stopped");
             let _ = app_handle.emit(
                 "pty:status",
                 serde_json::json!({ "status": "stopped" }),
@@ -91,6 +81,7 @@ impl PtyManager {
         let mut lock = self.instance.lock().map_err(|e| e.to_string())?;
         *lock = Some(PtyInstance {
             writer,
+            master: pair.master,
             child,
             _reader_thread: reader_thread,
         });
@@ -114,12 +105,20 @@ impl PtyManager {
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<(), String> {
-        // portable-pty resize requires access to the master PTY
-        // For now, we store the size and it will be applied on next spawn
-        // TODO: Store master handle for resize support
-        let _ = cols;
-        let _ = rows;
-        Ok(())
+        let lock = self.instance.lock().map_err(|e| e.to_string())?;
+        if let Some(ref inst) = *lock {
+            inst.master
+                .resize(PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|e| format!("Resize error: {}", e))?;
+            Ok(())
+        } else {
+            Ok(()) // No instance, ignore resize
+        }
     }
 
     pub fn kill(&self) -> Result<(), String> {

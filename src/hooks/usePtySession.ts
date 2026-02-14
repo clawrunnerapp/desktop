@@ -7,11 +7,15 @@ interface UsePtySessionOptions {
   onData: (data: string) => void;
   onStatusChange: (state: PtyState) => void;
   settings: Settings;
+  args: string[];
 }
 
-export function usePtySession({ onData, onStatusChange, settings }: UsePtySessionOptions) {
+export function usePtySession({ onData, onStatusChange, settings, args }: UsePtySessionOptions) {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+
+  const argsRef = useRef(args);
+  argsRef.current = args;
 
   const onDataRef = useRef(onData);
   onDataRef.current = onData;
@@ -39,9 +43,10 @@ export function usePtySession({ onData, onStatusChange, settings }: UsePtySessio
       unlisteners.push(unlisten2);
 
       try {
-        console.log("[pty] Spawning with settings:", settingsRef.current);
-        await invoke("pty_spawn", { settings: settingsRef.current });
-        console.log("[pty] Spawn succeeded");
+        await invoke("pty_spawn", {
+          settings: settingsRef.current,
+          args: argsRef.current,
+        });
         onStatusChangeRef.current({ status: "running" });
       } catch (err) {
         console.error("[pty] Spawn failed:", err);
@@ -76,7 +81,7 @@ export function usePtySession({ onData, onStatusChange, settings }: UsePtySessio
     }
   }, []);
 
-  const restart = useCallback(async () => {
+  const restart = useCallback(async (newArgs?: string[]) => {
     onStatusChangeRef.current({ status: "starting" });
     try {
       await invoke("pty_kill");
@@ -84,7 +89,10 @@ export function usePtySession({ onData, onStatusChange, settings }: UsePtySessio
       // May already be dead
     }
     try {
-      await invoke("pty_spawn", { settings: settingsRef.current });
+      await invoke("pty_spawn", {
+        settings: settingsRef.current,
+        args: newArgs ?? argsRef.current,
+      });
       onStatusChangeRef.current({ status: "running" });
     } catch (err) {
       onStatusChangeRef.current({ status: "error", errorMessage: String(err) });

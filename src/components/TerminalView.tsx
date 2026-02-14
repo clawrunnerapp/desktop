@@ -5,9 +5,10 @@ import type { PtyState, Settings } from "../types/index.ts";
 interface TerminalViewProps {
   onStatusChange: (state: PtyState) => void;
   settings: Settings;
+  args: string[];
 }
 
-export function TerminalView({ onStatusChange, settings }: TerminalViewProps) {
+export function TerminalView({ onStatusChange, settings, args }: TerminalViewProps) {
   const { containerRef, writeToTerminal } = useTerminal({
     onData: handleUserInput,
     onResize: handleResize,
@@ -17,6 +18,7 @@ export function TerminalView({ onStatusChange, settings }: TerminalViewProps) {
     onData: writeToTerminal,
     onStatusChange,
     settings,
+    args,
   });
 
   function handleUserInput(data: string) {
