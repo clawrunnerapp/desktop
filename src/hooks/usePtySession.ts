@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { PtyState, Settings } from "../types/index.ts";
+import type { PtyState, PtyStatus, Settings } from "../types/index.ts";
 
 interface PtyDataEvent {
   sessionId: number;
@@ -13,6 +13,8 @@ interface PtyStatusEvent {
   status: string;
   errorMessage?: string;
 }
+
+const VALID_PTY_STATUSES: ReadonlySet<string> = new Set<PtyStatus>(["starting", "running", "stopped", "error"]);
 
 interface UsePtySessionOptions {
   onData: (data: string) => void;
@@ -43,36 +45,78 @@ export function usePtySession({ onData, onStatusChange, settings, args, initialS
     spawnedRef.current = true;
 
     let cancelled = false;
-    const unlisteners: Array<() => void> = [];
+    const unlistenFns: Array<() => void> = [];
+    const listenPromises: Array<Promise<() => void>> = [];
     const { cols, rows } = initialSize;
+
+    // Buffer events received before session ID is known (fast-exit race).
+    // Once the session ID is set, buffered events matching the ID are replayed.
+    const pendingDataEvents: PtyDataEvent[] = [];
+    const pendingStatusEvents: PtyStatusEvent[] = [];
+    let sessionKnown = false;
+
+    function handleDataEvent(payload: PtyDataEvent) {
+      if (cancelled) return;
+      if (!sessionKnown) {
+        pendingDataEvents.push(payload);
+        return;
+      }
+      if (payload.sessionId === sessionIdRef.current) {
+        onDataRef.current(payload.data);
+      }
+    }
+
+    function handleStatusEvent(payload: PtyStatusEvent) {
+      if (cancelled) return;
+      if (!sessionKnown) {
+        pendingStatusEvents.push(payload);
+        return;
+      }
+      if (payload.sessionId === sessionIdRef.current) {
+        const status: PtyStatus = VALID_PTY_STATUSES.has(payload.status)
+          ? (payload.status as PtyStatus)
+          : "error";
+        onStatusChangeRef.current({ status, errorMessage: payload.errorMessage });
+      }
+    }
+
+    function drainPendingEvents(sid: number) {
+      sessionKnown = true;
+      for (const evt of pendingDataEvents) {
+        if (!cancelled && evt.sessionId === sid) {
+          onDataRef.current(evt.data);
+        }
+      }
+      pendingDataEvents.length = 0;
+      for (const evt of pendingStatusEvents) {
+        if (!cancelled && evt.sessionId === sid) {
+          const status: PtyStatus = VALID_PTY_STATUSES.has(evt.status)
+            ? (evt.status as PtyStatus)
+            : "error";
+          onStatusChangeRef.current({ status, errorMessage: evt.errorMessage });
+        }
+      }
+      pendingStatusEvents.length = 0;
+    }
 
     async function setup() {
       // Register listeners FIRST so no events are lost between spawn and listen.
-      // Session ID filtering prevents stale events from prior sessions.
-      // Accept events when sessionIdRef is 0 (before spawn returns) because
-      // the Rust spawn() joins the old reader thread before starting the new one,
-      // so only new-session events can arrive during this window.
-      const matchesSession = (id: number) =>
-        sessionIdRef.current === 0 || id === sessionIdRef.current;
-
-      const unlisten1 = await listen<PtyDataEvent>("pty:data", (event) => {
-        if (!cancelled && matchesSession(event.payload.sessionId)) {
-          onDataRef.current(event.payload.data);
-        }
+      // Events arriving before the session ID is known are buffered and replayed.
+      const p1 = listen<PtyDataEvent>("pty:data", (event) => {
+        handleDataEvent(event.payload);
       });
+      listenPromises.push(p1);
+      const unlisten1 = await p1;
       if (cancelled) { unlisten1(); return; }
-      unlisteners.push(unlisten1);
+      unlistenFns.push(unlisten1);
 
-      const unlisten2 = await listen<PtyStatusEvent>("pty:status", (event) => {
-        if (!cancelled && matchesSession(event.payload.sessionId)) {
-          onStatusChangeRef.current({
-            status: event.payload.status as PtyState["status"],
-            errorMessage: event.payload.errorMessage,
-          });
-        }
+      const p2 = listen<PtyStatusEvent>("pty:status", (event) => {
+        handleStatusEvent(event.payload);
       });
+      listenPromises.push(p2);
+      const unlisten2 = await p2;
       if (cancelled) { unlisten2(); unlisten1(); return; }
-      unlisteners.push(unlisten2);
+      unlistenFns.push(unlisten2);
 
       // Now spawn - events emitted after this will be caught by listeners above.
       if (cancelled) return;
@@ -89,6 +133,8 @@ export function usePtySession({ onData, onStatusChange, settings, args, initialS
         }
         sessionIdRef.current = sid;
         onStatusChangeRef.current({ status: "running" });
+        // Replay any events that arrived before the session ID was known
+        drainPendingEvents(sid);
       } catch (err) {
         if (cancelled) return;
         console.error("[pty] Spawn failed:", err);
@@ -103,7 +149,13 @@ export function usePtySession({ onData, onStatusChange, settings, args, initialS
 
     return () => {
       cancelled = true;
-      unlisteners.forEach((fn) => fn());
+      // Unlisten already-resolved listeners
+      const alreadyCalled = new Set(unlistenFns);
+      unlistenFns.forEach((fn) => fn());
+      // Clean up any listen promises still pending (skip already-called ones)
+      listenPromises.forEach((p) => p.then((fn) => {
+        if (!alreadyCalled.has(fn)) fn();
+      }).catch(() => {}));
       if (sessionIdRef.current > 0) {
         invoke("pty_kill", { sessionId: sessionIdRef.current }).catch(() => {});
       }
@@ -111,16 +163,20 @@ export function usePtySession({ onData, onStatusChange, settings, args, initialS
   }, [initialSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const write = useCallback(async (data: string) => {
+    const sid = sessionIdRef.current;
+    if (sid === 0) return;
     try {
-      await invoke("pty_write", { data });
+      await invoke("pty_write", { sessionId: sid, data });
     } catch {
       // PTY may be dead; status event will handle it
     }
   }, []);
 
   const resize = useCallback(async (cols: number, rows: number) => {
+    const sid = sessionIdRef.current;
+    if (sid === 0) return;
     try {
-      await invoke("pty_resize", { cols, rows });
+      await invoke("pty_resize", { sessionId: sid, cols, rows });
     } catch {
       // Ignore resize errors
     }

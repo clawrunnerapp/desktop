@@ -13,6 +13,30 @@ fn is_allowed_env_key(key: &str) -> bool {
         && key.ends_with("_API_KEY")
 }
 
+/// Environment variables safe to pass through from the parent process.
+/// This prevents leaking sensitive credentials (AWS_SECRET_ACCESS_KEY,
+/// DATABASE_URL, etc.) to the child Node.js process.
+const PASSTHROUGH_ENV_VARS: &[&str] = &[
+    // System identity
+    "HOME", "USER", "LOGNAME", "SHELL",
+    // Locale
+    "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "LC_COLLATE",
+    "LC_MONETARY", "LC_NUMERIC", "LC_TIME", "LANGUAGE",
+    // Temp directories
+    "TMPDIR", "TMP", "TEMP",
+    // Linux display (needed if OpenClaw spawns GUI tools)
+    "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR",
+    // macOS specific
+    "__CF_USER_TEXT_ENCODING",
+    // SSH agent (needed for git operations within OpenClaw)
+    "SSH_AUTH_SOCK", "SSH_AGENT_PID",
+    // Proxy settings (needed for network access / API calls)
+    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+    "http_proxy", "https_proxy", "no_proxy",
+    // Node.js TLS
+    "NODE_EXTRA_CA_CERTS",
+];
+
 /// Resolves the path to the bundled Node.js binary inside Tauri resources.
 fn node_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
     let resource_dir = app
@@ -131,6 +155,47 @@ pub fn build_openclaw_command(
 
     let mut cmd = CommandBuilder::new(&node_path);
 
+    // Clear inherited environment to prevent leaking sensitive vars
+    // (AWS_SECRET_ACCESS_KEY, DATABASE_URL, etc.) to the child process.
+    cmd.env_clear();
+
+    // Pass through only safe system env vars from parent process
+    for var in PASSTHROUGH_ENV_VARS {
+        if let Ok(val) = std::env::var(var) {
+            cmd.env(var, &val);
+        }
+    }
+
+    // Terminal type
+    cmd.env("TERM", "xterm-256color");
+
+    // PATH: start with parent's PATH, prepend bundled node dir if available
+    let mut path_val = std::env::var("PATH").unwrap_or_default();
+    if let Some(node_dir) = node_path.parent() {
+        if node_dir != std::path::Path::new("") {
+            let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+            path_val = if path_val.is_empty() {
+                node_dir.to_string_lossy().to_string()
+            } else {
+                format!("{}{}{}", node_dir.to_string_lossy(), sep, path_val)
+            };
+        }
+    }
+    if !path_val.is_empty() {
+        cmd.env("PATH", &path_val);
+    }
+
+    // Core env vars for OpenClaw isolation
+    cmd.env("OPENCLAW_NO_RESPAWN", "1");
+    cmd.env("OPENCLAW_STATE_DIR", state_dir.to_string_lossy().as_ref());
+
+    // Inject API keys from settings as env vars (only known safe key names)
+    for (key, value) in &settings.api_keys {
+        if !value.is_empty() && is_allowed_env_key(key) {
+            cmd.env(key, value);
+        }
+    }
+
     // Node.js flags + openclaw entry point
     cmd.arg("--disable-warning=ExperimentalWarning");
     cmd.arg(&entry_path);
@@ -144,36 +209,6 @@ pub fn build_openclaw_command(
     if let Some(home) = dirs::home_dir() {
         cmd.cwd(home);
     }
-
-    // Core env vars for OpenClaw isolation
-    cmd.env("OPENCLAW_NO_RESPAWN", "1");
-    cmd.env("OPENCLAW_STATE_DIR", state_dir.to_string_lossy().as_ref());
-
-    // Ensure node is in PATH
-    if let Some(node_dir) = node_path.parent() {
-        if node_dir != std::path::Path::new("") {
-            if let Ok(current_path) = std::env::var("PATH") {
-                let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
-                let new_path = format!("{}{}{}", node_dir.to_string_lossy(), sep, current_path);
-                cmd.env("PATH", &new_path);
-            }
-        }
-    }
-
-    // Inject API keys from settings as env vars (only known safe key names)
-    for (key, value) in &settings.api_keys {
-        if !value.is_empty() && is_allowed_env_key(key) {
-            cmd.env(key, value);
-        }
-    }
-
-    // Pass through common env vars
-    for var in &["HOME", "USER", "SHELL", "LANG"] {
-        if let Ok(val) = std::env::var(var) {
-            cmd.env(var, &val);
-        }
-    }
-    cmd.env("TERM", "xterm-256color");
 
     Ok(cmd)
 }

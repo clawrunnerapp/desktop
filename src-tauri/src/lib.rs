@@ -12,6 +12,7 @@ const ALLOWED_ARGS: &[&str] = &[
     "onboard",
     "--skip-daemon",
     "gateway",
+    "tui",
 ];
 
 fn validate_args(args: &[String]) -> Result<(), String> {
@@ -55,25 +56,25 @@ fn pty_spawn(
 const MAX_WRITE_SIZE: usize = 1_048_576; // 1 MB
 
 #[tauri::command]
-fn pty_write(state: tauri::State<'_, AppState>, data: String) -> Result<(), String> {
+fn pty_write(state: tauri::State<'_, AppState>, session_id: u64, data: String) -> Result<(), String> {
     if data.len() > MAX_WRITE_SIZE {
         return Err(format!("Write data too large: {} bytes", data.len()));
     }
-    state.pty.write(&data)
+    state.pty.write(session_id, &data)
 }
 
 #[tauri::command]
-fn pty_resize(state: tauri::State<'_, AppState>, cols: u16, rows: u16) -> Result<(), String> {
+fn pty_resize(state: tauri::State<'_, AppState>, session_id: u64, cols: u16, rows: u16) -> Result<(), String> {
     if cols == 0 || rows == 0 {
         return Err("cols and rows must be non-zero".to_string());
     }
-    state.pty.resize(cols, rows)
+    state.pty.resize(session_id, cols, rows)
 }
 
 #[tauri::command]
 fn pty_kill(state: tauri::State<'_, AppState>, session_id: u64) -> Result<(), String> {
     if session_id == 0 {
-        return Err("Invalid session_id".to_string());
+        return Err("Invalid session_id: 0 is reserved".to_string());
     }
     state.pty.kill(session_id)
 }

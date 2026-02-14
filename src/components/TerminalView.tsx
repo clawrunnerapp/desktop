@@ -6,12 +6,14 @@ interface TerminalViewProps {
   onStatusChange: (state: PtyState) => void;
   settings: Settings;
   args: string[];
+  active: boolean;
 }
 
-export function TerminalView({ onStatusChange, settings, args }: TerminalViewProps) {
+export function TerminalView({ onStatusChange, settings, args, active }: TerminalViewProps) {
   const { containerRef, writeToTerminal, initialSize } = useTerminal({
     onData: handleUserInput,
     onResize: handleResize,
+    active,
   });
 
   const { write, resize } = usePtySession({

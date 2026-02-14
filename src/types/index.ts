@@ -6,6 +6,8 @@ export interface Settings {
 
 export type AppMode = "welcome" | "onboard" | "gateway";
 
+export type TabId = "gateway" | "chat" | "webui";
+
 export type PtyStatus = "starting" | "running" | "stopped" | "error";
 
 export interface PtyState {

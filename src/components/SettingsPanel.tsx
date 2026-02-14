@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Settings } from "../types/index.ts";
 
@@ -19,6 +19,7 @@ export function SettingsPanel({ settings, onSave, onClose }: SettingsPanelProps)
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({
     ...settings.apiKeys,
   });
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -28,16 +29,18 @@ export function SettingsPanel({ settings, onSave, onClose }: SettingsPanelProps)
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const handleChange = (key: string, value: string) => {
+  const handleChange = useCallback((key: string, value: string) => {
     setApiKeys((prev) => ({ ...prev, [key]: value }));
-  };
+    setSaveError(null);
+  }, []);
 
   const handleSave = async () => {
     const newSettings: Settings = { apiKeys };
     try {
       await invoke("save_settings", { settings: newSettings });
-    } catch {
-      // Settings save failed - continue anyway, runtime will use in-memory
+    } catch (err) {
+      setSaveError(`Failed to save settings to disk: ${String(err)}`);
+      return;
     }
     onSave(newSettings);
   };
@@ -57,6 +60,7 @@ export function SettingsPanel({ settings, onSave, onClose }: SettingsPanelProps)
             />
           </div>
         ))}
+        {saveError && <div className="settings-error">{saveError}</div>}
         <div className="settings-actions">
           <button className="btn-secondary" onClick={onClose}>
             Cancel
