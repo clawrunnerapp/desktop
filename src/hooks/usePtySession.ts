@@ -13,25 +13,39 @@ export function usePtySession({ onData, onStatusChange, settings }: UsePtySessio
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
+  const onDataRef = useRef(onData);
+  onDataRef.current = onData;
+
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
+
+  const spawnedRef = useRef(false);
+
   useEffect(() => {
+    if (spawnedRef.current) return;
+    spawnedRef.current = true;
+
     const unlisteners: Array<() => void> = [];
 
     async function setup() {
       const unlisten1 = await listen<string>("pty:data", (event) => {
-        onData(event.payload);
+        onDataRef.current(event.payload);
       });
       unlisteners.push(unlisten1);
 
       const unlisten2 = await listen<PtyState>("pty:status", (event) => {
-        onStatusChange(event.payload);
+        onStatusChangeRef.current(event.payload);
       });
       unlisteners.push(unlisten2);
 
       try {
+        console.log("[pty] Spawning with settings:", settingsRef.current);
         await invoke("pty_spawn", { settings: settingsRef.current });
-        onStatusChange({ status: "running" });
+        console.log("[pty] Spawn succeeded");
+        onStatusChangeRef.current({ status: "running" });
       } catch (err) {
-        onStatusChange({
+        console.error("[pty] Spawn failed:", err);
+        onStatusChangeRef.current({
           status: "error",
           errorMessage: String(err),
         });
@@ -63,7 +77,7 @@ export function usePtySession({ onData, onStatusChange, settings }: UsePtySessio
   }, []);
 
   const restart = useCallback(async () => {
-    onStatusChange({ status: "starting" });
+    onStatusChangeRef.current({ status: "starting" });
     try {
       await invoke("pty_kill");
     } catch {
@@ -71,11 +85,11 @@ export function usePtySession({ onData, onStatusChange, settings }: UsePtySessio
     }
     try {
       await invoke("pty_spawn", { settings: settingsRef.current });
-      onStatusChange({ status: "running" });
+      onStatusChangeRef.current({ status: "running" });
     } catch (err) {
-      onStatusChange({ status: "error", errorMessage: String(err) });
+      onStatusChangeRef.current({ status: "error", errorMessage: String(err) });
     }
-  }, [onStatusChange]);
+  }, []);
 
   return { write, resize, restart };
 }

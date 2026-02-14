@@ -29,20 +29,45 @@ fn node_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// Resolves the path to the bundled OpenClaw entry point.
 fn openclaw_entry_path(app: &AppHandle) -> Result<PathBuf, String> {
+    // 1. Check bundled resources (production)
     let resource_dir = app
         .path()
         .resource_dir()
         .map_err(|e| format!("Cannot resolve resource dir: {}", e))?;
 
-    let path = resource_dir
+    let bundled_path = resource_dir
         .join("resources")
         .join("openclaw")
         .join("openclaw.mjs");
-    if path.exists() {
-        Ok(path)
-    } else {
-        Err(format!("OpenClaw entry not found at: {:?}", path))
+    if bundled_path.exists() {
+        return Ok(bundled_path);
     }
+
+    // 2. Check DEV_OPENCLAW_PATH env var
+    if let Ok(dev_path) = std::env::var("DEV_OPENCLAW_PATH") {
+        let p = PathBuf::from(&dev_path);
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+
+    // 3. Dev fallback: workspace sibling directory (../../openclaw/openclaw.mjs relative to src-tauri)
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dev_path = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|workspace| workspace.join("openclaw").join("openclaw.mjs"));
+
+    if let Some(path) = dev_path {
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+
+    Err(format!(
+        "OpenClaw entry not found. Checked bundled: {:?}",
+        bundled_path
+    ))
 }
 
 /// Returns the OpenClaw state directory (~/.openclaw-desktop/openclaw-state/).
@@ -54,20 +79,59 @@ fn openclaw_state_dir() -> Result<PathBuf, String> {
     Ok(state_dir)
 }
 
-/// Builds the CommandBuilder for spawning OpenClaw CLI via PTY.
+/// Creates a wrapper shell script for the `openclaw` command in a temp directory.
+/// Returns the directory containing the wrapper (to be added to PATH).
+fn create_openclaw_wrapper(node_path: &PathBuf, entry_path: &PathBuf) -> Result<PathBuf, String> {
+    let wrapper_dir = std::env::temp_dir().join("openclaw-desktop-bin");
+    std::fs::create_dir_all(&wrapper_dir)
+        .map_err(|e| format!("Cannot create wrapper dir: {}", e))?;
+
+    let wrapper_path = wrapper_dir.join("openclaw");
+
+    let node_str = node_path.to_string_lossy();
+    let entry_str = entry_path.to_string_lossy();
+
+    let script = format!(
+        "#!/bin/sh\nexec \"{}\" --disable-warning=ExperimentalWarning \"{}\" \"$@\"\n",
+        node_str, entry_str
+    );
+
+    std::fs::write(&wrapper_path, &script)
+        .map_err(|e| format!("Cannot write wrapper script: {}", e))?;
+
+    // Make executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(&wrapper_path, perms)
+            .map_err(|e| format!("Cannot chmod wrapper: {}", e))?;
+    }
+
+    Ok(wrapper_dir)
+}
+
+/// Builds the CommandBuilder for spawning an interactive shell with OpenClaw available.
 pub fn build_openclaw_command(
     app: &AppHandle,
     settings: &Settings,
 ) -> Result<CommandBuilder, String> {
     let node_path = node_binary_path(app)?;
+    eprintln!("[openclaw] Node path: {:?}", node_path);
     let entry_path = openclaw_entry_path(app)?;
+    eprintln!("[openclaw] Entry path: {:?}", entry_path);
     let state_dir = openclaw_state_dir()?;
+    eprintln!("[openclaw] State dir: {:?}", state_dir);
 
-    let mut cmd = CommandBuilder::new(&node_path);
+    // Create wrapper script so `openclaw` command is available in the shell
+    let wrapper_dir = create_openclaw_wrapper(&node_path, &entry_path)?;
+    eprintln!("[openclaw] Wrapper dir: {:?}", wrapper_dir);
 
-    // Node.js args: suppress experimental warnings, run openclaw entry
-    cmd.arg("--disable-warning=ExperimentalWarning");
-    cmd.arg(&entry_path);
+    // Determine user's shell
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    eprintln!("[openclaw] Shell: {}", shell);
+
+    let mut cmd = CommandBuilder::new(&shell);
 
     // Set working directory to user's home
     if let Some(home) = dirs::home_dir() {
@@ -78,17 +142,17 @@ pub fn build_openclaw_command(
     cmd.env("OPENCLAW_NO_RESPAWN", "1");
     cmd.env("OPENCLAW_STATE_DIR", state_dir.to_string_lossy().as_ref());
 
-    // Ensure bundled node's directory is in PATH
+    // Put wrapper dir + node dir at the front of PATH
+    let mut path_parts = vec![wrapper_dir.to_string_lossy().to_string()];
     if let Some(node_dir) = node_path.parent() {
-        if let Ok(current_path) = std::env::var("PATH") {
-            let new_path = format!(
-                "{}:{}",
-                node_dir.to_string_lossy(),
-                current_path
-            );
-            cmd.env("PATH", &new_path);
+        if node_dir != std::path::Path::new("") {
+            path_parts.push(node_dir.to_string_lossy().to_string());
         }
     }
+    if let Ok(current_path) = std::env::var("PATH") {
+        path_parts.push(current_path);
+    }
+    cmd.env("PATH", &path_parts.join(":"));
 
     // Inject API keys from settings as env vars
     for (key, value) in &settings.api_keys {
@@ -98,7 +162,7 @@ pub fn build_openclaw_command(
     }
 
     // Pass through common env vars that CLI might need
-    for var in &["HOME", "USER", "SHELL", "TERM", "LANG"] {
+    for var in &["HOME", "USER", "SHELL", "LANG"] {
         if let Ok(val) = std::env::var(var) {
             cmd.env(var, &val);
         }

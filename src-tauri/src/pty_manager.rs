@@ -60,19 +60,28 @@ impl PtyManager {
         // Spawn reader thread that forwards PTY output to frontend via Tauri events
         let app_handle = app.clone();
         let reader_thread = thread::spawn(move || {
+            eprintln!("[pty_reader] Reader thread started");
             let mut buf = [0u8; 8192];
             loop {
                 match reader.read(&mut buf) {
-                    Ok(0) => break,
+                    Ok(0) => {
+                        eprintln!("[pty_reader] EOF");
+                        break;
+                    }
                     Ok(n) => {
                         // Convert bytes to string (lossy for non-UTF8 terminal output)
                         let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                        eprintln!("[pty_reader] Read {} bytes", n);
                         let _ = app_handle.emit("pty:data", &data);
                     }
-                    Err(_) => break,
+                    Err(e) => {
+                        eprintln!("[pty_reader] Error: {}", e);
+                        break;
+                    }
                 }
             }
             // Process ended - emit status
+            eprintln!("[pty_reader] Thread ending, emitting stopped");
             let _ = app_handle.emit(
                 "pty:status",
                 serde_json::json!({ "status": "stopped" }),

@@ -24,8 +24,12 @@ fn pty_spawn(
         *s = settings.clone();
     }
 
+    eprintln!("[pty_spawn] Building command...");
     let cmd = openclaw::build_openclaw_command(&app, &settings)?;
-    state.pty.spawn(&app, cmd, 120, 40)
+    eprintln!("[pty_spawn] Command built, spawning PTY...");
+    let result = state.pty.spawn(&app, cmd, 120, 40);
+    eprintln!("[pty_spawn] Spawn result: {:?}", result);
+    result
 }
 
 #[tauri::command]
