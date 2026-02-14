@@ -9,7 +9,7 @@ interface TerminalViewProps {
 }
 
 export function TerminalView({ onStatusChange, settings, args }: TerminalViewProps) {
-  const { containerRef, writeToTerminal } = useTerminal({
+  const { containerRef, writeToTerminal, initialSize } = useTerminal({
     onData: handleUserInput,
     onResize: handleResize,
   });
@@ -19,6 +19,7 @@ export function TerminalView({ onStatusChange, settings, args }: TerminalViewPro
     onStatusChange,
     settings,
     args,
+    initialSize,
   });
 
   function handleUserInput(data: string) {

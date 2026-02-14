@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -14,6 +14,13 @@ export function useTerminal({ onData, onResize }: UseTerminalOptions) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const [initialSize, setInitialSize] = useState<{ cols: number; rows: number } | null>(null);
+
+  // Keep callbacks in refs so the xterm onData handler always calls the latest version
+  const onDataRef = useRef(onData);
+  onDataRef.current = onData;
+  const onResizeRef = useRef(onResize);
+  onResizeRef.current = onResize;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -42,26 +49,44 @@ export function useTerminal({ onData, onResize }: UseTerminalOptions) {
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Initial fit
-    requestAnimationFrame(() => {
+    // Initial fit - report dimensions for PTY spawn
+    let initialRafId = requestAnimationFrame(() => {
+      initialRafId = 0;
       fitAddon.fit();
-      onResize(term.cols, term.rows);
+      setInitialSize({ cols: term.cols, rows: term.rows });
+      onResizeRef.current(term.cols, term.rows);
     });
 
-    // Handle user input
-    const dataDisposable = term.onData(onData);
+    // Handle user input via ref to always use latest callback
+    const dataDisposable = term.onData((data) => onDataRef.current(data));
 
-    // Handle container resize
+    // Auto-focus the terminal
+    term.focus();
+
+    // Handle container resize with debounce
+    let disposed = false;
+    let resizeTimer: ReturnType<typeof setTimeout>;
+    let resizeRafId = 0;
     const observer = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
-        fitAddon.fit();
-        onResize(term.cols, term.rows);
-      });
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (disposed) return;
+        resizeRafId = requestAnimationFrame(() => {
+          resizeRafId = 0;
+          if (disposed) return;
+          fitAddon.fit();
+          onResizeRef.current(term.cols, term.rows);
+        });
+      }, 50);
     });
     observer.observe(container);
     resizeObserverRef.current = observer;
 
     return () => {
+      disposed = true;
+      cancelAnimationFrame(initialRafId);
+      cancelAnimationFrame(resizeRafId);
+      clearTimeout(resizeTimer);
       dataDisposable.dispose();
       observer.disconnect();
       term.dispose();
@@ -75,5 +100,5 @@ export function useTerminal({ onData, onResize }: UseTerminalOptions) {
     termRef.current?.write(data);
   }, []);
 
-  return { containerRef, writeToTerminal };
+  return { containerRef, writeToTerminal, initialSize };
 }

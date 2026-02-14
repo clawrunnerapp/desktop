@@ -5,7 +5,23 @@ mod settings;
 use pty_manager::PtyManager;
 use settings::Settings;
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
+
+/// Allowed OpenClaw subcommands that can be passed from the frontend.
+const ALLOWED_ARGS: &[&str] = &[
+    "onboard",
+    "--skip-daemon",
+    "gateway",
+];
+
+fn validate_args(args: &[String]) -> Result<(), String> {
+    for arg in args {
+        if !ALLOWED_ARGS.contains(&arg.as_str()) {
+            return Err(format!("Disallowed argument: {}", arg));
+        }
+    }
+    Ok(())
+}
 
 struct AppState {
     pty: PtyManager,
@@ -18,7 +34,14 @@ fn pty_spawn(
     state: tauri::State<'_, AppState>,
     settings: Settings,
     args: Vec<String>,
-) -> Result<(), String> {
+    cols: u16,
+    rows: u16,
+) -> Result<u64, String> {
+    if cols == 0 || rows == 0 {
+        return Err("cols and rows must be non-zero".to_string());
+    }
+    validate_args(&args)?;
+
     // Update stored settings
     {
         let mut s = state.settings.lock().map_err(|e| e.to_string())?;
@@ -26,22 +49,33 @@ fn pty_spawn(
     }
 
     let cmd = openclaw::build_openclaw_command(&app, &settings, &args)?;
-    state.pty.spawn(&app, cmd, 120, 40)
+    state.pty.spawn(&app, cmd, cols, rows)
 }
+
+const MAX_WRITE_SIZE: usize = 1_048_576; // 1 MB
 
 #[tauri::command]
 fn pty_write(state: tauri::State<'_, AppState>, data: String) -> Result<(), String> {
+    if data.len() > MAX_WRITE_SIZE {
+        return Err(format!("Write data too large: {} bytes", data.len()));
+    }
     state.pty.write(&data)
 }
 
 #[tauri::command]
 fn pty_resize(state: tauri::State<'_, AppState>, cols: u16, rows: u16) -> Result<(), String> {
+    if cols == 0 || rows == 0 {
+        return Err("cols and rows must be non-zero".to_string());
+    }
     state.pty.resize(cols, rows)
 }
 
 #[tauri::command]
-fn pty_kill(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.pty.kill()
+fn pty_kill(state: tauri::State<'_, AppState>, session_id: u64) -> Result<(), String> {
+    if session_id == 0 {
+        return Err("Invalid session_id".to_string());
+    }
+    state.pty.kill(session_id)
 }
 
 #[tauri::command]
@@ -82,15 +116,10 @@ pub fn run() {
             load_settings_cmd,
             check_openclaw_configured,
         ])
-        .setup(|app| {
-            let settings = settings::load_settings();
-            let _ = app.emit("settings:loaded", &settings);
-            Ok(())
-        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if let Some(state) = window.try_state::<AppState>() {
-                    let _ = state.pty.kill();
+                    let _ = state.pty.kill(0);
                 }
             }
         })

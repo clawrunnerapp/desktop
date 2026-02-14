@@ -5,6 +5,14 @@ use tauri::Manager;
 
 use crate::settings::Settings;
 
+/// Allowlist of env var names that may be set from user settings.
+/// Prevents injection of dangerous vars like PATH, LD_PRELOAD, etc.
+fn is_allowed_env_key(key: &str) -> bool {
+    key.len() <= 64
+        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && key.ends_with("_API_KEY")
+}
+
 /// Resolves the path to the bundled Node.js binary inside Tauri resources.
 fn node_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
     let resource_dir = app
@@ -20,10 +28,14 @@ fn node_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
 
     let path = resource_dir.join("resources").join(node_name);
     if path.exists() {
-        Ok(path)
-    } else {
-        // Fallback: try system node (for development)
+        return Ok(path);
+    }
+
+    // Dev-only fallback: use system node
+    if cfg!(debug_assertions) {
         Ok(PathBuf::from(node_name))
+    } else {
+        Err(format!("Bundled Node.js not found at {:?}", path))
     }
 }
 
@@ -43,24 +55,28 @@ fn openclaw_entry_path(app: &AppHandle) -> Result<PathBuf, String> {
         return Ok(bundled_path);
     }
 
-    // 2. Check DEV_OPENCLAW_PATH env var
-    if let Ok(dev_path) = std::env::var("DEV_OPENCLAW_PATH") {
-        let p = PathBuf::from(&dev_path);
-        if p.exists() {
-            return Ok(p);
+    // Dev-only fallbacks (disabled in release builds)
+    #[cfg(debug_assertions)]
+    {
+        // 2. Check DEV_OPENCLAW_PATH env var
+        if let Ok(dev_path) = std::env::var("DEV_OPENCLAW_PATH") {
+            let p = PathBuf::from(&dev_path);
+            if p.exists() {
+                return Ok(p);
+            }
         }
-    }
 
-    // 3. Dev fallback: workspace sibling directory
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dev_path = manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|workspace| workspace.join("openclaw").join("openclaw.mjs"));
+        // 3. Dev fallback: workspace sibling directory
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let dev_path = manifest_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|workspace| workspace.join("openclaw").join("openclaw.mjs"));
 
-    if let Some(path) = dev_path {
-        if path.exists() {
-            return Ok(path);
+        if let Some(path) = dev_path {
+            if path.exists() {
+                return Ok(path);
+            }
         }
     }
 
@@ -73,27 +89,37 @@ fn openclaw_entry_path(app: &AppHandle) -> Result<PathBuf, String> {
 /// Returns the OpenClaw state directory (~/.openclaw-desktop/openclaw-state/).
 fn openclaw_state_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let state_dir = home.join(".openclaw-desktop").join("openclaw-state");
-    std::fs::create_dir_all(&state_dir)
-        .map_err(|e| format!("Cannot create state dir: {}", e))?;
+    let base_dir = home.join(".openclaw-desktop");
+    let state_dir = base_dir.join("openclaw-state");
+
+    if !state_dir.exists() {
+        std::fs::create_dir_all(&state_dir)
+            .map_err(|e| format!("Cannot create state dir: {}", e))?;
+    }
+
+    // Always enforce permissions (handles both fresh and pre-existing directories)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for dir in &[&base_dir, &state_dir] {
+            let perms = std::fs::Permissions::from_mode(0o700);
+            let _ = std::fs::set_permissions(dir, perms);
+        }
+    }
+
     Ok(state_dir)
 }
 
 /// Checks if OpenClaw is already configured (openclaw.json exists in state dir).
 pub fn is_configured() -> bool {
-    let home = match dirs::home_dir() {
-        Some(h) => h,
-        None => return false,
-    };
-    let config_path = home
-        .join(".openclaw-desktop")
-        .join("openclaw-state")
-        .join("openclaw.json");
-    config_path.exists()
+    match openclaw_state_dir() {
+        Ok(state_dir) => state_dir.join("openclaw.json").exists(),
+        Err(_) => false,
+    }
 }
 
 /// Builds the CommandBuilder for spawning OpenClaw CLI with given args.
-/// Example args: ["onboard"], ["gateway"], ["configure"]
+/// Example args: ["onboard", "--skip-daemon"], ["gateway"]
 pub fn build_openclaw_command(
     app: &AppHandle,
     settings: &Settings,
@@ -127,15 +153,16 @@ pub fn build_openclaw_command(
     if let Some(node_dir) = node_path.parent() {
         if node_dir != std::path::Path::new("") {
             if let Ok(current_path) = std::env::var("PATH") {
-                let new_path = format!("{}:{}", node_dir.to_string_lossy(), current_path);
+                let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+                let new_path = format!("{}{}{}", node_dir.to_string_lossy(), sep, current_path);
                 cmd.env("PATH", &new_path);
             }
         }
     }
 
-    // Inject API keys from settings as env vars
+    // Inject API keys from settings as env vars (only known safe key names)
     for (key, value) in &settings.api_keys {
-        if !value.is_empty() {
+        if !value.is_empty() && is_allowed_env_key(key) {
             cmd.env(key, value);
         }
     }

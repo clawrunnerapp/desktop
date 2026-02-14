@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Settings } from "../types/index.ts";
 
@@ -19,6 +19,14 @@ export function SettingsPanel({ settings, onSave, onClose }: SettingsPanelProps)
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({
     ...settings.apiKeys,
   });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const handleChange = (key: string, value: string) => {
     setApiKeys((prev) => ({ ...prev, [key]: value }));
@@ -54,7 +62,7 @@ export function SettingsPanel({ settings, onSave, onClose }: SettingsPanelProps)
             Cancel
           </button>
           <button className="btn-primary" onClick={handleSave}>
-            Save & Apply
+            Save
           </button>
         </div>
       </div>
