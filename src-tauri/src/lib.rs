@@ -6,6 +6,7 @@ use pty_manager::PtyManager;
 use settings::Settings;
 use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_autostart::MacosLauncher;
 
 /// Allowed OpenClaw subcommands that can be passed from the frontend.
 const ALLOWED_ARGS: &[&str] = &[
@@ -104,6 +105,7 @@ pub fn run() {
     let initial_settings = settings::load_settings();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(AppState {
             pty: PtyManager::new(),
             settings: Mutex::new(initial_settings),

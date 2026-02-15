@@ -205,6 +205,61 @@ html, body, #root {
   color: #e94560;
 }
 
+.settings-section-heading {
+  margin-top: 24px;
+}
+
+.settings-toggle-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  transition: opacity 0.15s;
+}
+
+.settings-toggle-field.settings-toggle-busy {
+  opacity: 0.6;
+}
+
+.settings-toggle-field label {
+  font-size: 13px;
+  color: #e0e0e0;
+  cursor: pointer;
+}
+
+.settings-toggle-busy label {
+  cursor: default;
+}
+
+.settings-toggle-hint {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
+.settings-toggle-field input[type="checkbox"] {
+  accent-color: #e94560;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.settings-toggle-field input[type="checkbox"]:focus-visible {
+  outline: 2px solid #e94560;
+  outline-offset: 2px;
+}
+
+.settings-toggle-field input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.settings-autostart-error {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
 .settings-field {
   margin-bottom: 12px;
 }
