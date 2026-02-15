@@ -5,6 +5,14 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      openclaw_ref:
+        description: 'OpenClaw version (tag, branch, or commit SHA)'
+        required: false
+        default: 'v2026.2.13'
+
+env:
+  OPENCLAW_REF: ${{ inputs.openclaw_ref || 'v2026.2.13' }}
 
 jobs:
   build:
@@ -28,6 +36,13 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Clone OpenClaw
+        uses: actions/checkout@v4
+        with:
+          repository: openclaw/openclaw
+          ref: ${{ env.OPENCLAW_REF }}
+          path: openclaw
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -54,10 +69,14 @@ jobs:
       - name: Prepare bundle (Unix)
         if: runner.os != 'Windows'
         run: bash scripts/prepare-bundle.sh
+        env:
+          OPENCLAW_SRC: ${{ github.workspace }}/openclaw
 
       - name: Prepare bundle (Windows)
         if: runner.os == 'Windows'
         run: pwsh scripts/prepare-bundle.ps1
+        env:
+          OPENCLAW_SRC: ${{ github.workspace }}/openclaw
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
