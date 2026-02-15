@@ -103,7 +103,7 @@ if (Test-Path $DeployDir) { Remove-Item -Recurse -Force $DeployDir }
 
 Push-Location $OpenClawDir
 try {
-    pnpm --filter openclaw deploy --prod $DeployDir
+    pnpm --filter openclaw deploy --prod --legacy $DeployDir
 } finally {
     Pop-Location
 }
