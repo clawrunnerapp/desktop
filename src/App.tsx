@@ -7,6 +7,7 @@ import { SettingsPanel } from "./components/SettingsPanel.tsx";
 import { TabBar } from "./components/TabBar.tsx";
 import { WebUIView } from "./components/WebUIView.tsx";
 import type { PtyState, Settings, AppMode, TabId } from "./types/index.ts";
+import { useUpdater } from "./hooks/useUpdater.ts";
 
 const CHAT_ARGS = ["tui"];
 
@@ -30,6 +31,7 @@ function App() {
   const [restartKey, setRestartKey] = useState(0);
   const [activeTab, setActiveTab] = useState<TabId>("gateway");
   const [chatSpawned, setChatSpawned] = useState(false);
+  const updater = useUpdater();
 
   useEffect(() => {
     invoke<boolean>("check_openclaw_configured").then(setIsConfigured).catch(() => {});
@@ -178,6 +180,7 @@ function App() {
         mode={mode}
         onRestart={handleRestart}
         onBackToWelcome={handleBackToWelcome}
+        updater={updater}
       />
 
       {showSettings && (

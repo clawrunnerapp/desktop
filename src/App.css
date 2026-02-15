@@ -178,6 +178,75 @@ html, body, #root {
   color: #e0e0e0;
 }
 
+.status-btn-primary {
+  border-color: #e94560;
+  color: #e94560;
+}
+
+.status-btn-primary:hover {
+  background-color: #e94560;
+  color: white;
+}
+
+/* Update Notice */
+.update-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.update-notice-error {
+  color: #ef4444;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.update-progress-bar {
+  display: inline-block;
+  width: 60px;
+  height: 4px;
+  background-color: #0f3460;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.update-progress-fill {
+  display: block;
+  height: 100%;
+  background-color: #e94560;
+  border-radius: 2px;
+  transition: width 0.2s;
+}
+
+.update-progress-indeterminate {
+  background: linear-gradient(90deg, #0f3460 0%, #e94560 50%, #0f3460 100%);
+  background-size: 200% 100%;
+  animation: progress-indeterminate 1.5s linear infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-progress-indeterminate {
+    animation: none;
+    background: #0f3460;
+    position: relative;
+  }
+  .update-progress-indeterminate::after {
+    content: "";
+    display: block;
+    width: 50%;
+    height: 100%;
+    background: #e94560;
+    border-radius: 2px;
+  }
+}
+
 /* Settings Panel */
 .settings-overlay {
   position: fixed;
