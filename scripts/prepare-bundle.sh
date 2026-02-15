@@ -137,7 +137,7 @@ echo ">>> Building OpenClaw..."
 # --- Step 4: Create pruned production deployment ---
 echo ">>> Creating pruned production deployment (pnpm deploy --prod)..."
 DEPLOY_DIR="$TMPDIR_WORK/openclaw-deploy"
-(cd "$OPENCLAW_DIR" && pnpm --filter openclaw deploy --prod "$DEPLOY_DIR")
+(cd "$OPENCLAW_DIR" && pnpm --filter openclaw deploy --prod --legacy "$DEPLOY_DIR")
 
 # --- Step 5: Copy to resources ---
 echo ">>> Copying to resources..."
