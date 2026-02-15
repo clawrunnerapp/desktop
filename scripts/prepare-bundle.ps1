@@ -98,7 +98,7 @@ try {
 
 # --- Step 4: Create pruned production deployment ---
 Write-Host ">>> Creating pruned production deployment (pnpm deploy --prod)..."
-$DeployDir = Join-Path ([System.IO.Path]::GetTempPath()) "openclaw-deploy"
+$DeployDir = Join-Path $AppDir ".openclaw-deploy"
 if (Test-Path $DeployDir) { Remove-Item -Recurse -Force $DeployDir }
 
 Push-Location $OpenClawDir
