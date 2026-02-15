@@ -15,7 +15,7 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             node_platform: darwin-arm64
-          - platform: macos-13
+          - platform: macos-latest
             target: x86_64-apple-darwin
             node_platform: darwin-x64
           - platform: ubuntu-22.04
@@ -34,8 +34,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install pnpm
-        run: npm install -g pnpm
+      - name: Enable pnpm via corepack
+        run: corepack enable
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
