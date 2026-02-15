@@ -128,7 +128,7 @@ function App() {
   return (
     <div className="app">
       <div className="app-header">
-        <h1>OpenClaw Desktop</h1>
+        <h1>ClawRunner</h1>
         <div className="app-header-actions">
           <button onClick={() => setShowSettings(true)}>Settings</button>
         </div>

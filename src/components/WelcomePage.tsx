@@ -10,7 +10,7 @@ export function WelcomePage({ isConfigured, onStart }: WelcomePageProps) {
     <div className="welcome-page">
       <div className="welcome-content">
         <div className="welcome-logo">&#129438;</div>
-        <h1>OpenClaw Desktop</h1>
+        <h1>ClawRunner for OpenClaw</h1>
         <p className="welcome-version">v{APP_VERSION}</p>
 
         <p className="welcome-description">

@@ -1,14 +1,14 @@
 [package]
-name = "openclaw-desktop"
+name = "clawrunner"
 version = "0.0.1"
 edition = "2021"
 
 [lib]
-name = "openclaw_desktop_lib"
+name = "clawrunner_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "openclaw-desktop"
+name = "clawrunner"
 path = "src/main.rs"
 
 [build-dependencies]

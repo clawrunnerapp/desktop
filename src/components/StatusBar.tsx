@@ -47,7 +47,7 @@ export function StatusBar({ status, mode, onRestart, onBackToWelcome, updater }:
           <UpdateNotice updater={updater} />
         )}
         {!showActions && (updater.status === "idle" || updater.status === "checking") && (
-          <span>OpenClaw Desktop v{APP_VERSION}</span>
+          <span>ClawRunner v{APP_VERSION}</span>
         )}
       </div>
     </div>

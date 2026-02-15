@@ -100,7 +100,7 @@ else
 fi
 NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ARCHIVE}"
 
-echo "=== OpenClaw Desktop Bundle Preparation ==="
+echo "=== ClawRunner Bundle Preparation ==="
 echo "Target:    ${TARGET}"
 echo "Node.js:   v${NODE_VERSION}"
 echo "OpenClaw:  ${OPENCLAW_DIR}"

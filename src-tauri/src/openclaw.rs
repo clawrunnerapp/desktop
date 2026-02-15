@@ -110,10 +110,10 @@ fn openclaw_entry_path(app: &AppHandle) -> Result<PathBuf, String> {
     ))
 }
 
-/// Returns the OpenClaw state directory (~/.openclaw-desktop/openclaw-state/).
+/// Returns the OpenClaw state directory (~/.clawrunner/openclaw-state/).
 fn openclaw_state_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let base_dir = home.join(".openclaw-desktop");
+    let base_dir = home.join(".clawrunner");
     let state_dir = base_dir.join("openclaw-state");
 
     if !state_dir.exists() {

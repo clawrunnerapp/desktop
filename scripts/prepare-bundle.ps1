@@ -49,7 +49,7 @@ if (-not (Test-Path $OpenClawDir)) {
 $NodeDist = "node-v${NodeVersion}-win-${NodeArch}"
 $NodeUrl = "https://nodejs.org/dist/v${NodeVersion}/${NodeDist}.zip"
 
-Write-Host "=== OpenClaw Desktop Bundle Preparation ==="
+Write-Host "=== ClawRunner Bundle Preparation ==="
 Write-Host "Target:    $Target"
 Write-Host "Node.js:   v$NodeVersion"
 Write-Host "OpenClaw:  $OpenClawDir"

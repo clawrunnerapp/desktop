@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicoverbruggen/tauri-v2-schema/main/src/tauri.conf.schema.json",
-  "productName": "OpenClaw Desktop",
+  "productName": "ClawRunner",
   "version": "0.0.1",
-  "identifier": "com.openclaw.desktop",
+  "identifier": "com.clawrunner.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "OpenClaw Desktop",
+        "title": "ClawRunner",
         "width": 1200,
         "height": 800,
         "minWidth": 800,

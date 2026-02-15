@@ -8,16 +8,16 @@ pub struct Settings {
     pub api_keys: HashMap<String, String>,
 }
 
-/// Returns the path to the settings file (~/.openclaw-desktop/settings.json).
+/// Returns the path to the settings file (~/.clawrunner/settings.json).
 fn settings_path() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    Ok(home.join(".openclaw-desktop").join("settings.json"))
+    Ok(home.join(".clawrunner").join("settings.json"))
 }
 
 /// Ensures the settings directory exists with restricted permissions.
 fn ensure_settings_dir() -> Result<(), String> {
     let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let config_dir = home.join(".openclaw-desktop");
+    let config_dir = home.join(".clawrunner");
 
     if !config_dir.exists() {
         std::fs::create_dir_all(&config_dir)

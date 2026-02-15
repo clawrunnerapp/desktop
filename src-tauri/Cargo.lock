@@ -318,6 +318,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "clawrunner"
+version = "0.0.1"
+dependencies = [
+ "dirs 6.0.0",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-process",
+ "tauri-plugin-updater",
+]
+
+[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2216,21 +2231,6 @@ name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
-
-[[package]]
-name = "openclaw-desktop"
-version = "0.0.1"
-dependencies = [
- "dirs 6.0.0",
- "portable-pty",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-process",
- "tauri-plugin-updater",
-]
 
 [[package]]
 name = "openssl-probe"
