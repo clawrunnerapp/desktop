@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/nicoverbruggen/tauri-v2-schema/main/src/tauri.conf.schema.json",
   "productName": "ClawRunner",
   "version": "0.0.1",
-  "identifier": "com.clawrunner.app",
+  "identifier": "app.clawrunner.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -39,7 +39,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_YOUR_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI3NkRGQkY2OUQ0MjREMkIKUldRclRVS2Q5dnR0dDI4VFQrQVJJWjB0ZmNJTlVuYTd1Qk5hNFBRZWZJRElMaFVBUThrdTd0bSsK",
       "endpoints": [
         "https://github.com/clawrunnerapp/desktop/releases/latest/download/latest.json"
       ]
