@@ -10,6 +10,22 @@ on:
         description: 'OpenClaw version (tag, branch, or commit SHA)'
         required: false
         default: 'v2026.2.13'
+      build_macos_arm64:
+        description: 'macOS ARM64'
+        type: boolean
+        default: true
+      build_macos_x64:
+        description: 'macOS x64'
+        type: boolean
+        default: true
+      build_linux_x64:
+        description: 'Linux x64'
+        type: boolean
+        default: true
+      build_windows_x64:
+        description: 'Windows x64'
+        type: boolean
+        default: true
 
 env:
   OPENCLAW_REF: ${{ inputs.openclaw_ref || 'v2026.2.13' }}
@@ -18,24 +34,38 @@ permissions:
   contents: write
 
 jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.set.outputs.include }}
+    steps:
+      - id: set
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const platforms = [
+              { platform: 'macos-14', target: 'aarch64-apple-darwin', node_platform: 'darwin-arm64', extra_args: '', input: 'build_macos_arm64' },
+              { platform: 'macos-15-intel', target: 'x86_64-apple-darwin', node_platform: 'darwin-x64', extra_args: '', input: 'build_macos_x64' },
+              { platform: 'ubuntu-22.04', target: 'x86_64-unknown-linux-gnu', node_platform: 'linux-x64', extra_args: '', input: 'build_linux_x64' },
+              { platform: 'windows-latest', target: 'x86_64-pc-windows-msvc', node_platform: 'win-x64', extra_args: '--bundles nsis,updater', input: 'build_windows_x64' },
+            ];
+
+            const isManual = context.eventName === 'workflow_dispatch';
+            const inputs = context.payload.inputs || {};
+
+            const filtered = isManual
+              ? platforms.filter(p => inputs[p.input] !== 'false')
+              : platforms;
+
+            const result = filtered.map(({ input, ...rest }) => rest);
+            core.setOutput('include', JSON.stringify(result));
+
   build:
+    needs: matrix
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: macos-14
-            target: aarch64-apple-darwin
-            node_platform: darwin-arm64
-          - platform: macos-15-intel
-            target: x86_64-apple-darwin
-            node_platform: darwin-x64
-          - platform: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            node_platform: linux-x64
-          - platform: windows-latest
-            target: x86_64-pc-windows-msvc
-            node_platform: win-x64
-            extra_args: --bundles nsis,updater
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
 
     runs-on: ${{ matrix.platform }}
     steps:
