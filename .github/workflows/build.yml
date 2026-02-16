@@ -46,7 +46,7 @@ jobs:
             const platforms = [
               { platform: 'macos-14', target: 'aarch64-apple-darwin', node_platform: 'darwin-arm64', extra_args: '--bundles app,updater', input: 'build_macos_arm64' },
               { platform: 'macos-15-intel', target: 'x86_64-apple-darwin', node_platform: 'darwin-x64', extra_args: '--bundles app,updater', input: 'build_macos_x64' },
-              { platform: 'ubuntu-22.04', target: 'x86_64-unknown-linux-gnu', node_platform: 'linux-x64', extra_args: '', input: 'build_linux_x64' },
+              { platform: 'ubuntu-22.04', target: 'x86_64-unknown-linux-gnu', node_platform: 'linux-x64', extra_args: '--bundles deb,rpm,updater', input: 'build_linux_x64' },
               { platform: 'windows-latest', target: 'x86_64-pc-windows-msvc', node_platform: 'win-x64', extra_args: '--bundles nsis,updater', input: 'build_windows_x64' },
             ];
 
