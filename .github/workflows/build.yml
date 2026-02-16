@@ -35,6 +35,7 @@ jobs:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             node_platform: win-x64
+            extra_args: --bundles nsis,updater
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -94,4 +95,4 @@ jobs:
           releaseBody: "See the assets for download links."
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} ${{ matrix.extra_args }}
